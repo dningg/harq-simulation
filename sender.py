@@ -1,10 +1,10 @@
-# sender.py
 import socket
 import numpy as np
 import time
 
 # Max transmission attempts
 MAX_TRANSMISSION = 4
+timeout = 1
 polynomial = "1101"
 
 # CRC calculation
@@ -28,7 +28,6 @@ def append_crc(data, polynomial=polynomial):
 
 # Hamming encode/decoder
 def hamming_encode(data_with_crc):
-    
     data_bits = data_with_crc[:64]  # 64 data bits
     crc_bits = data_with_crc[64:]   # 3 CRC bits
 
@@ -56,9 +55,12 @@ def hamming_encode(data_with_crc):
     return encoded_data
 
 
-def sender(packets, server_ip, server_port):
+def sender(packets, server_ip, server_port, timeout=timeout):
     sender_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sender_socket.connect((server_ip, server_port))
+    
+    # Set timeout for socket operations
+    sender_socket.settimeout(timeout)
     
     for packet in packets:
         print(f"[Sender] Data to send: {packet}")
@@ -71,17 +73,22 @@ def sender(packets, server_ip, server_port):
         while attempt < MAX_TRANSMISSION:
             print(f"[Sender] Sending data (attempt {attempt + 1})...")
             sender_socket.sendall(encoded_data.tobytes())
-            response = sender_socket.recv(1024).decode()
+            
+            try:
+                response = sender_socket.recv(1024).decode()
+                
+                if response == "ACK":
+                    print("[Sender] ACK received. Moving to next packet.")
+                    break
 
-            if response == "ACK":
-                print("[Sender] ACK received. Moving to next packet.")
-                break
-
-            elif response == "NACK":
-                print("[Sender] NACK received. Resending data...")
-                attempt += 1
-            else:
-                print("[Sender] Unknown response. Resending data...")
+                elif response == "NACK":
+                    print("[Sender] NACK received. Resending data...")
+                    attempt += 1
+                else:
+                    print("[Sender] Unknown response. Resending data...")
+                    attempt += 1
+            except socket.timeout:
+                print(f"[Sender] Timeout occurred. No response received in {timeout} seconds. Retrying...")
                 attempt += 1
 
             if attempt == MAX_TRANSMISSION:
@@ -94,9 +101,7 @@ def sender(packets, server_ip, server_port):
 if __name__ == "__main__":
     server_ip = "127.0.0.1"
     server_port = 5055
-
-    packets = [np.random.randint(0, 2, 64) for _ in range(32)]
-
-
-    sender(packets, server_ip, server_port)
+    # Example packet generation
+    data = [np.random.randint(0, 2, 64) for _ in range(32)]
+    sender(data, server_ip, server_port)
     time.sleep(1)
