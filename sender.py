@@ -93,7 +93,6 @@ def sender(packets, server_ip, server_port, timeout=timeout):
 
             if attempt == MAX_TRANSMISSION:
                 print("[Sender] Max transmission attempts reached. Skipping to next packet.")
-                break
 
     print("---[Sender] All packets sent. Closing connection.---")
     sender_socket.close()
@@ -102,6 +101,7 @@ if __name__ == "__main__":
     server_ip = "127.0.0.1"
     server_port = 5055
     # Example packet generation
-    data = [np.random.randint(0, 2, 64) for _ in range(32)]
+    data = [np.random.randint(0, 2, 64) for _ in range(56)]
+    np.save('data_original.npy', data)
     sender(data, server_ip, server_port)
     time.sleep(1)

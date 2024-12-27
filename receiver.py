@@ -5,7 +5,7 @@ import random
 # Max transmission attempts
 MAX_TRANSMISSION = 4
 polynomial = "1101"
-loss_packet = 0.1
+loss_packet = 0.05
 error = 0.02
 
 # CRC calculation
@@ -68,26 +68,29 @@ def receiver(host_ip, host_port, loss_packet=loss_packet, error=error):
     receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     receiver_socket.bind((host_ip, host_port))
     receiver_socket.listen(1)
-    
+
     print(f"[Receiver] Listening on {host_ip}:{host_port}...")
     conn, addr = receiver_socket.accept()
     print(f"[Receiver] Connected by {addr}")
-    
+
     total_packets = 0
     lost_packets = 0
+    retransmission = 0  # Initialize retransmission counter
     combined_signal = None  # Initialize combined_signal variable
+    received_packets = []  # List to store the received packets
 
     while True:
         received_data = conn.recv(512)
         if not received_data:
             break
 
-        # Mô phỏng mất gói tin
+        # Simulate packet loss
         if random.random() < loss_packet:
             lost_packets += 1
             total_packets += 1
+            retransmission += 1
             print("[Receiver] Packet lost")
-            continue  # Không xử lý gói tin nếu bị mất
+            continue  # Do not process lost packet
         
         encoded_data = np.frombuffer(received_data, dtype=np.uint8)
         print(f"---[Receiver] Received data from sender---")
@@ -95,47 +98,58 @@ def receiver(host_ip, host_port, loss_packet=loss_packet, error=error):
 
         encoded_data = encoded_data.tolist()[::4]
         
-        # Mô phỏng lỗi bit
+        # Simulate bit errors
         corrupted_data = []
         for bit in encoded_data:
             corrupted_bit = bit
             if random.random() < error:
-                corrupted_bit = 1 - bit  # Nếu bit = 0 thì đổi thành 1, nếu bit = 1 thì đổi thành 0
+                corrupted_bit = 1 - bit  # Flip bit if error occurs
             corrupted_data.append(corrupted_bit)
-        
+
         # Combine the corrupted data if there's already data stored in combined_signal
         if combined_signal is None:
             combined_signal = corrupted_data
         else:
-            combined_signal = np.maximum(combined_signal, corrupted_data)  # Combine using maximum (bitwise OR)
+            combined_signal = np.maximum(combined_signal, corrupted_data)  # Combine using bitwise OR
 
         try:
             decoded_data_with_crc = hamming_decode(corrupted_data)
             if decoded_data_with_crc is None:
                 print("[Receiver] Skipping corrupted data due to invalid error position.")
-                total_packets += 1
+                retransmission += 1
                 continue
 
+            # Attempt to validate CRC and determine the outcome
             if validate_crc(decoded_data_with_crc):
                 print("[Receiver] CRC validation passed. Sending ACK...")
+                received_packets.append(decoded_data_with_crc[:64])  # Save the packet in the list
                 combined_signal = None
                 conn.sendall("ACK".encode())
-
             else:
                 print("[Receiver] CRC validation failed. Sending NACK...")
                 conn.sendall("NACK".encode())
-                
+                # Check if the maximum transmission attempts have been reached
+                if retransmission == MAX_TRANSMISSION:
+                    print(f"[Receiver] Max transmission attempts reached for packet {total_packets}. Storing packet...")
+                    received_packets.append(decoded_data_with_crc[:64])  # Save the corrupted packet after max attempts
+                    combined_signal = None
+                retransmission += 1
+
         except ValueError as e:
             print(f"[Receiver] Decoding error: {e}. Sending NACK...")
             conn.sendall("NACK".encode())
+            retransmission += 1
 
         total_packets += 1
-    
+
     print("------------@@[Receiver] Closing connection@@------------")
     print(f"[Receiver] Total packets received: {total_packets}")
     print(f"[Receiver] Lost packets: {lost_packets}")
-    
+    print(f"[Receiver] Data packets list: {len(received_packets)}")
+    np.save('data_receiver.npy', received_packets)
+
     receiver_socket.close()
+
 
 
 if __name__ == "__main__":
