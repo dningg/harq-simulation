@@ -38,11 +38,19 @@ for i in range(len(data_original)):
     ber = bit_errors / total_bits
     ber_per_packet.append(ber)
 
+# Calculate the average BER
+average_ber = np.mean(ber_per_packet)
+
 # Plot the BER for each packet
 plt.figure(figsize=(10, 6))
-plt.plot(range(1, len(ber_per_packet) + 1), ber_per_packet, marker='o', linestyle='-', color='b')
+plt.plot(range(1, len(ber_per_packet) + 1), ber_per_packet, marker='o', linestyle='-', color='b', label='BER per Packet')
+plt.axhline(y=average_ber, color='r', linestyle='--', label=f'Average BER = {average_ber:.4f}')
 plt.title('Bit Error Rate (BER) for Each Packet')
 plt.xlabel('Packet Number')
 plt.ylabel('Bit Error Rate (BER)')
 plt.grid(True)
+plt.legend()
+
+# Save the plot to a file
+plt.savefig('ber_plot.png', dpi=300, bbox_inches='tight')  # Lưu ảnh với độ phân giải 300 DPI
 plt.show()
